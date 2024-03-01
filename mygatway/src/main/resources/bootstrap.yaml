@@ -1,0 +1,35 @@
+server:
+  port: 8084
+
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+      config:
+        server-addr: localhost:8848
+        file-extension: yaml
+        gateway:
+          routes:
+            - id: position
+              uri: lb://position
+              predicates:
+                - Path=/position/**
+            - id: report
+              uri: lb://report
+              predicates:
+                - Path=/report/**
+            - id: tran
+              uri: lb://tran
+              predicates:
+                - Path=/tran/**
+            - id: user
+              uri: lb://user
+              predicates:
+                - Path=/user/**
+            - id: warehouse
+              uri: lb://warehouse
+              predicates:
+                - Path=/warehouse/**
+  application:
+    name: gateway
