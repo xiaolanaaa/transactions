@@ -5,6 +5,7 @@ import com.huohu.pojo.JsonRes;
 import com.huohu.pojo.Position;
 import com.huohu.pojo.Tran;
 import com.huohu.service.PositionService;
+import com.huohu.service.ReportService;
 import com.huohu.service.TranService;
 import com.huohu.service.UserService;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -32,6 +33,8 @@ public class TranController {
     PositionService positionService;
     @Autowired
     UserService userService;
+    @Autowired
+    ReportService reportService;
 
     //委托挂单接口
 
@@ -149,42 +152,40 @@ public class TranController {
     @RequestMapping("revoke")
     public JsonRes revoke(@RequestBody Tran tran) {
         //定义退款金额变量
-        Integer refund=0;
+        Integer refund = 0;
         //获取到订单队列
-       if (tran!=null){
-           Tran byId = tranService.getById(tran.getId());
-           //撤单查询当前订单是否完成如果完成则无法撤单
-           if (byId!=null){
+        if (tran != null) {
+            Tran byId = tranService.getById(tran.getId());
+            //撤单查询当前订单是否完成如果完成则无法撤单
+            if (byId != null) {
 
-               //部分完成则将未完成的部分从订单中删除掉
-               //需要退还的保证金以及手续费
-               refund=(byId.getUncompleted()* byId.getSalary())+byId.getUncompleted();
-               //当前用户资金+退还的保证金以及手续费
+                //部分完成则将未完成的部分从订单中删除掉
+                //需要退还的保证金以及手续费
+                refund = (byId.getUncompleted() * byId.getSalary()) + byId.getUncompleted();
+                //当前用户资金+退还的保证金以及手续费
 
-               if (byId.getPut().equals("sell")){
-                   //返回持仓数量
-                   LambdaQueryWrapper<Position> positionLambdaQueryWrapper = new LambdaQueryWrapper<>();
-                   positionLambdaQueryWrapper.eq(Position::getTranname,byId.getName());
-                   positionLambdaQueryWrapper.eq(Position::getUserid,byId.getUserid());
-                   Position one = positionService.getOne(positionLambdaQueryWrapper);
-                   if (one!=null){
-                       one.setNumber(one.getNumber()+byId.getUncompleted());
-                       positionService.updateById(one);
-                   }
-               }
-               //删除数据库中的委托挂单
-               tranService.removeById(tran.getId());
-           }else {
-               return JsonRes.error("当前订单已完成撮合，无法撤回");
-           }
-       }else {
-           return JsonRes.error("参数错误");
-       }
+                if (byId.getPut().equals("sell")) {
+                    //返回持仓数量
+                    LambdaQueryWrapper<Position> positionLambdaQueryWrapper = new LambdaQueryWrapper<>();
+                    positionLambdaQueryWrapper.eq(Position::getTranname, byId.getName());
+                    positionLambdaQueryWrapper.eq(Position::getUserid, byId.getUserid());
+                    Position one = positionService.getOne(positionLambdaQueryWrapper);
+                    if (one != null) {
+                        one.setNumber(one.getNumber() + byId.getUncompleted());
+                        positionService.updateById(one);
+                    }
+                }
+                //删除数据库中的委托挂单
+                tranService.removeById(tran.getId());
+            } else {
+                return JsonRes.error("当前订单已完成撮合，无法撤回");
+            }
+        } else {
+            return JsonRes.error("参数错误");
+        }
 
         //返回成功信息
-         return JsonRes.success("撤单成功");
-
-
+        return JsonRes.success("撤单成功");
 
 
     }
@@ -199,7 +200,7 @@ public class TranController {
         List<Tran> selllist = tranService.findsellList();
         for (Tran tran : trans) {
             for (Tran tran1 : selllist) {
-
+                //股票产品是否一样
                 if (tran.getName().equals(tran1.getName())) {
                     //大于则进行撮合交易
                     if (tran.getSalary() >= tran1.getSalary()) {
@@ -239,7 +240,7 @@ public class TranController {
                             //未成交手数
                             tran1.setUncompleted(tran1.getUncompleted() - tran1.getDealnum());
                             tranService.updateById(tran1);
-                            tran.setUncompleted(tran.getUncompleted()-tran1.getDealnum());
+                            tran.setUncompleted(tran.getUncompleted() - tran1.getDealnum());
                             tranService.updateById(tran);
                             if (tran.getUncompleted() == 0) {
                                 //删除数据库中的挂单信息
@@ -291,9 +292,6 @@ public class TranController {
         }
 
         redisTemplate.boundValueOps("sellList").set(selllist);
-
-
-
 
 
     }
