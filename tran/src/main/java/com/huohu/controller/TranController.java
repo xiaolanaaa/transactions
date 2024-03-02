@@ -211,7 +211,7 @@ public class TranController {
                             tran.setUncompleted(tran.getUncompleted() - tran.getDealnum());
 
                             tran1.setDealnum(tran.getDealnum());
-                            tran1.setUncompleted(tran1.getUncompleted() - tran1.getDealnum());
+                            tran1.setUncompleted(tran1.getUncompleted() - tran.getDealnum());
 
                             tranService.updateById(tran);
                             tranService.updateById(tran1);
@@ -263,7 +263,7 @@ public class TranController {
                         Position one = positionService.getOne(positionLambdaQueryWrapper);
                         if (one != null) {
                             //更新持仓数量
-                            one.setNumber(one.getNumber() + tran.getDealnum());
+                            one.setNumber(one.getNumber() + tran1.getDealnum());
                             //更新成交均价
                             one.setSalary(one.getSalary() + tran.getSalary() / 2);
                             //修改至数据库
