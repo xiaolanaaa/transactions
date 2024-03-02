@@ -98,8 +98,6 @@ public class TranController {
             if (one != null) {
 
 
-
-
                 if (one.getNumber() >= tran.getNum()) {
                     tran.setStatus("待处理");
                     tran.setTime(new Date());
@@ -121,14 +119,14 @@ public class TranController {
                         redisTemplate.boundValueOps("sellList").set(sellList);
 
                     } else {
-                        List<Tran> trans=new ArrayList<>();
+                        List<Tran> trans = new ArrayList<>();
                         trans.add(tran);
                         redisTemplate.boundValueOps("sellList").set(trans);
 
                     }
                     //更新持仓数量
-                    one.setNumber(one.getNumber()-tran.getNum());
-                    one.setSalary((one.getSalary()+ tran.getSalary())/2);
+                    one.setNumber(one.getNumber() - tran.getNum());
+                    one.setSalary((one.getSalary() + tran.getSalary()) / 2);
                     //将更新过的持仓数量修改至数据库
                     positionService.updateById(one);
                 } else {
@@ -140,7 +138,6 @@ public class TranController {
             //存入数据库
 
 
-
             return JsonRes.success("挂单成功");
 
 
@@ -150,16 +147,46 @@ public class TranController {
 
     //撤单接口
     @RequestMapping("revoke")
-    public void revoke() {
+    public JsonRes revoke(@RequestBody Tran tran) {
+        //定义退款金额变量
+        Integer refund=0;
         //获取到订单队列
+       if (tran!=null){
+           Tran byId = tranService.getById(tran.getId());
+           //撤单查询当前订单是否完成如果完成则无法撤单
+           if (byId!=null){
 
-        //撤单查询当前订单是否完成如果完成则无法撤单
+               //部分完成则将未完成的部分从订单中删除掉
+               //需要退还的保证金以及手续费
+               refund=(byId.getUncompleted()* byId.getSalary())+byId.getUncompleted();
+               //当前用户资金+退还的保证金以及手续费
 
-        //，部分完成则将未完成的部分从订单队列中删除掉
-
-        //redis中删除之后再从数据库中删除订单信息
+               if (byId.getPut().equals("sell")){
+                   //返回持仓数量
+                   LambdaQueryWrapper<Position> positionLambdaQueryWrapper = new LambdaQueryWrapper<>();
+                   positionLambdaQueryWrapper.eq(Position::getTranname,byId.getName());
+                   positionLambdaQueryWrapper.eq(Position::getUserid,byId.getUserid());
+                   Position one = positionService.getOne(positionLambdaQueryWrapper);
+                   if (one!=null){
+                       one.setNumber(one.getNumber()+byId.getUncompleted());
+                       positionService.updateById(one);
+                   }
+               }
+               //删除数据库中的委托挂单
+               tranService.removeById(tran.getId());
+           }else {
+               return JsonRes.error("当前订单已完成撮合，无法撤回");
+           }
+       }else {
+           return JsonRes.error("参数错误");
+       }
 
         //返回成功信息
+         return JsonRes.success("撤单成功");
+
+
+
+
     }
 
     //撮合交易
@@ -171,92 +198,102 @@ public class TranController {
         List<Tran> trans = tranService.findbuyList();
         List<Tran> selllist = tranService.findsellList();
         for (Tran tran : trans) {
-            for (Tran tran1 :selllist ) {
+            for (Tran tran1 : selllist) {
 
-                    if (tran.getName() .equals(tran1.getName()) ) {
-                        //大于则进行撮合交易
-                        if (tran.getSalary() <= tran1.getSalary()) {
-                            if (tran.getNum()<=tran1.getNum()){
-                                //买入数量小于等于卖出数量
-                                //成交手数
-                                tran.setDealnum(tran.getNum());
-                                //未成交手数
-                                tran.setUncompleted(tran.getNum()-tran.getDealnum());
+                if (tran.getName().equals(tran1.getName())) {
+                    //大于则进行撮合交易
+                    if (tran.getSalary() >= tran1.getSalary()) {
+                        if (tran.getUncompleted() >= tran1.getUncompleted()) {
+                            //买入数量大于等于卖出数量
+                            //成交手数
+                            tran.setDealnum(tran1.getUncompleted());
+                            //未成交手数
+                            tran.setUncompleted(tran.getUncompleted() - tran.getDealnum());
 
-                                tran1.setDealnum(tran.getDealnum());
-                                tran1.setUncompleted(tran1.getNum()-tran1.getDealnum());
+                            tran1.setDealnum(tran.getDealnum());
+                            tran1.setUncompleted(tran1.getUncompleted() - tran1.getDealnum());
 
-                                tranService.updateById(tran);
+                            tranService.updateById(tran);
+                            tranService.updateById(tran1);
 
-                                if (tran.getUncompleted()==0){
-                                    //删除数据库中的挂单信息
-                                    tranService.removeById(tran.getId());
-                                    //从队列中删除完成的挂单
-                                    selllist.remove(tran);
-
-                                }
-
-                                if (tran1.getUncompleted()==0){
-                                    //删除数据库中的挂单信息
-                                    tranService.removeById(tran1.getId());
-                                    //从队列中删除完成的挂单
-                                    trans.remove(tran1);
-                                }
-
-                            }else {
-                                //卖出数量大于买入数量
-
-                                //成交手数
-                                tran1.setDealnum(tran1.getNum());
-                                //未成交手数
-                                tran1.setUncompleted(tran1.getNum()-tran.getDealnum());
-                                tranService.updateById(tran1);
-                                if (tran.getUncompleted()==0){
-                                    //删除数据库中的挂单信息
-                                    tranService.removeById(tran.getId());
-                                    //从队列中删除完成的挂单
-                                    selllist.remove(tran);
-
-                                }
-                                if (tran1.getUncompleted()==0){
-                                    //删除数据库中的挂单信息
-                                    tranService.removeById(tran1.getId());
-                                    //从队列中删除完成的挂单
-                                    trans.remove(tran1);
-                                }
+                            if (tran.getUncompleted() == 0) {
+                                //删除数据库中的挂单信息
+                                tranService.removeById(tran.getId());
+                                //从队列中删除完成的挂单
+                                selllist.remove(tran);
 
                             }
-                            //修改持仓数量
-                            LambdaQueryWrapper<Position> positionLambdaQueryWrapper = new LambdaQueryWrapper<>();
-                            positionLambdaQueryWrapper.eq(Position::getUserid,2);
-                            positionLambdaQueryWrapper.eq(Position::getTranname,tran.getName());
-                            Position one = positionService.getOne(positionLambdaQueryWrapper);
-                            if (one!=null){
-                                one.setNumber(one.getNumber()+tran.getDealnum());
-                                one.setSalary(one.getSalary()+tran.getSalary()/2);
-                                positionService.updateById(one);
-                            }else {
-                                Position position = new Position();
-                                position.setTime(new Date());
-                                position.setTranname(tran.getName());
-                                position.setNumber(tran.getDealnum());
-                                position.setSalary(tran.getSalary());
-                                positionService.save(position);
+
+                            if (tran1.getUncompleted() == 0) {
+                                //删除数据库中的挂单信息
+                                tranService.removeById(tran1.getId());
+                                //从队列中删除完成的挂单
+                                trans.remove(tran1);
                             }
 
+                        } else {
+                            //卖出数量大于买入数量
+
+                            //成交手数
+                            tran1.setDealnum(tran.getUncompleted());
+                            //未成交手数
+                            tran1.setUncompleted(tran1.getUncompleted() - tran1.getDealnum());
+                            tranService.updateById(tran1);
+                            tran.setUncompleted(tran.getUncompleted()-tran1.getDealnum());
+                            tranService.updateById(tran);
+                            if (tran.getUncompleted() == 0) {
+                                //删除数据库中的挂单信息
+                                tranService.removeById(tran.getId());
+                                //从队列中删除完成的挂单
+                                selllist.remove(tran);
+
+                            }
+                            if (tran1.getUncompleted() == 0) {
+                                //删除数据库中的挂单信息
+                                tranService.removeById(tran1.getId());
+                                //从队列中删除完成的挂单
+                                trans.remove(tran1);
+                            }
 
                         }
+                        //修改持仓数量
+                        LambdaQueryWrapper<Position> positionLambdaQueryWrapper = new LambdaQueryWrapper<>();
+                        positionLambdaQueryWrapper.eq(Position::getUserid, 2);
+                        positionLambdaQueryWrapper.eq(Position::getTranname, tran.getName());
+                        Position one = positionService.getOne(positionLambdaQueryWrapper);
+                        if (one != null) {
+                            //更新持仓数量
+                            one.setNumber(one.getNumber() + tran.getDealnum());
+                            //更新成交均价
+                            one.setSalary(one.getSalary() + tran.getSalary() / 2);
+                            //修改至数据库
+                            positionService.updateById(one);
+                        } else {
+                            //没有持仓新建持仓对象
+                            Position position = new Position();
+                            //持仓时间
+                            position.setTime(new Date());
+                            //股票产品名称
+                            position.setTranname(tran.getName());
+                            //持仓数量
+                            position.setNumber(tran.getDealnum());
+                            //成交均价
+                            position.setSalary(tran.getSalary());
+                            positionService.save(position);
+                        }
+
+
                     }
+                }
 
 
             }
         }
+
         redisTemplate.boundValueOps("sellList").set(selllist);
 
 
-        //返回部分完成的数据
 
-        //撮合完成返回信息
 
 
     }
