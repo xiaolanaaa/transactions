@@ -283,12 +283,19 @@ public class TranController {
                             position.setSalary(tran.getSalary());
                             positionService.save(position);
                         }
+                        //添加成交记录
                         Report report = new Report();
+                        //成交手数
                         report.setDealnum(tran1.getDealnum());
+                        //成交股票产品名称
                         report.setTranname(tran1.getName());
+                        //成交均价
                         report.setSalary(tran1.getSalary());
+                        //买入方
                         report.setBuy(tran.getUsername());
+                        //卖出方
                         report.setSell(tran1.getUsername());
+                        //成交时间
                         report.setTime(new Date());
                         reportService.save(report);
 
