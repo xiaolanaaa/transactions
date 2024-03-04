@@ -204,12 +204,13 @@ public class TranController {
                     if (tran.getSalary() >= tran1.getSalary()) {
                         if (tran.getUncompleted() >= tran1.getUncompleted()) {
                             //买入数量大于等于卖出数量
-                            //成交手数
+                            //买入成交手数
                             tran.setDealnum(tran1.getUncompleted());
-                            //未成交手数
+                            //买入未成交手数
                             tran.setUncompleted(tran.getUncompleted() - tran.getDealnum());
-
+                            //卖出成交数量
                             tran1.setDealnum(tran.getDealnum());
+                            //卖出未成交手数
                             tran1.setUncompleted(tran1.getUncompleted() - tran.getDealnum());
 
                             tranService.updateById(tran);
@@ -233,11 +234,12 @@ public class TranController {
                         } else {
                             //卖出数量大于买入数量
 
-                            //成交手数
+                            //卖出成交手数
                             tran1.setDealnum(tran.getUncompleted());
-                            //未成交手数
+                            //卖出未成交手数
                             tran1.setUncompleted(tran1.getUncompleted() - tran1.getDealnum());
                             tranService.updateById(tran1);
+                            //买入未成交手数
                             tran.setUncompleted(tran.getUncompleted() - tran1.getDealnum());
                             tranService.updateById(tran);
                             if (tran.getUncompleted() == 0) {
