@@ -3,6 +3,7 @@ package com.huohu.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.huohu.pojo.JsonRes;
 import com.huohu.pojo.Position;
+import com.huohu.pojo.Report;
 import com.huohu.pojo.Tran;
 import com.huohu.service.PositionService;
 import com.huohu.service.ReportService;
@@ -282,6 +283,14 @@ public class TranController {
                             position.setSalary(tran.getSalary());
                             positionService.save(position);
                         }
+                        Report report = new Report();
+                        report.setDealnum(tran1.getDealnum());
+                        report.setTranname(tran1.getName());
+                        report.setSalary(tran1.getSalary());
+                        report.setBuy(tran.getUsername());
+                        report.setSell(tran1.getUsername());
+                        report.setTime(new Date());
+                        reportService.save(report);
 
 
                     }
