@@ -20,8 +20,15 @@ public class Report implements Serializable {
     private Integer dealnum;
     //成交时间
     private Date time;
-    //成交均价
+    //委托价格
     private Integer salary;
     //股票名称
     private String tranname;
+    //订立价格
+    private Integer price;
+    //状态
+    private String status;
+    //委托单号
+    private Integer tranId;
+
 }

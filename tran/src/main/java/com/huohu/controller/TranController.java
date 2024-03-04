@@ -24,21 +24,26 @@ import java.util.List;
 @RestController
 @RequestMapping("tran")
 public class TranController {
+    //委托挂单
     @Autowired
     TranService tranService;
+    //redis缓存
     @Autowired
     RedisTemplate redisTemplate;
+    //rabbitMQ缓存
     @Autowired
     RabbitTemplate rabbitTemplate;
+    //持仓
     @Autowired
     PositionService positionService;
+    //用户接口
     @Autowired
     UserService userService;
+    //成交订单
     @Autowired
     ReportService reportService;
 
-    //委托挂单接口
-
+    //委托挂单
     @RequestMapping("add")
     public JsonRes add(@RequestBody Tran tran) {
         //买入数量
@@ -68,10 +73,8 @@ public class TranController {
             tran.setUncompleted(tran.getNum());
             //存入数据库
             tranService.save(tran);
-
             //存入redis中
             List<Tran> buyList = (List<Tran>) redisTemplate.boundValueOps("buyList").get();
-
             if (buyList != null) {
                 buyList.add(tran);
                 redisTemplate.boundValueOps("buylist").set(buyList);
@@ -83,8 +86,6 @@ public class TranController {
                 rabbitTemplate.convertAndSend("tranlist", trans);
             }
             return JsonRes.success("委托买入成功");
-
-
         } else {
             //记录当前卖出手数
             sell = tran.getNum();
@@ -100,14 +101,11 @@ public class TranController {
             positionLambdaQueryWrapper.eq(Position::getUserid, tran.getUserid());
             Position one = positionService.getOne(positionLambdaQueryWrapper);
             if (one != null) {
-
-
                 if (one.getNumber() >= tran.getNum()) {
                     tran.setStatus("待处理");
                     tran.setTime(new Date());
                     tran.setDealnum(0);
                     tran.setUncompleted(tran.getNum());
-
                     tranService.save(tran);
                     //存入redis中
                     List<Tran> sellList = (List<Tran>) redisTemplate.boundValueOps("sellList").get();
@@ -117,16 +115,13 @@ public class TranController {
                                 tran1.setNum(tran1.getNum() + tran.getNum());
                             } else {
                                 sellList.add(tran);
-
                             }
                         }
                         redisTemplate.boundValueOps("sellList").set(sellList);
-
                     } else {
                         List<Tran> trans = new ArrayList<>();
                         trans.add(tran);
                         redisTemplate.boundValueOps("sellList").set(trans);
-
                     }
                     //更新持仓数量
                     one.setNumber(one.getNumber() - tran.getNum());
@@ -140,13 +135,8 @@ public class TranController {
                 return JsonRes.error("没有当前股票持仓无法卖出");
             }
             //存入数据库
-
-
             return JsonRes.success("挂单成功");
-
-
         }
-
     }
 
     //撤单接口
@@ -159,12 +149,10 @@ public class TranController {
             Tran byId = tranService.getById(tran.getId());
             //撤单查询当前订单是否完成如果完成则无法撤单
             if (byId != null) {
-
                 //部分完成则将未完成的部分从订单中删除掉
                 //需要退还的保证金以及手续费
                 refund = (byId.getUncompleted() * byId.getSalary()) + byId.getUncompleted();
                 //当前用户资金+退还的保证金以及手续费
-
                 if (byId.getPut().equals("sell")) {
                     //返回持仓数量
                     LambdaQueryWrapper<Position> positionLambdaQueryWrapper = new LambdaQueryWrapper<>();
@@ -184,11 +172,8 @@ public class TranController {
         } else {
             return JsonRes.error("参数错误");
         }
-
         //返回成功信息
         return JsonRes.success("撤单成功");
-
-
     }
 
     //撮合交易
@@ -213,25 +198,20 @@ public class TranController {
                             tran1.setDealnum(tran.getDealnum());
                             //卖出未成交手数
                             tran1.setUncompleted(tran1.getUncompleted() - tran.getDealnum());
-
                             tranService.updateById(tran);
                             tranService.updateById(tran1);
-
                             if (tran.getUncompleted() == 0) {
                                 //删除数据库中的挂单信息
                                 tranService.removeById(tran.getId());
                                 //从队列中删除完成的挂单
                                 selllist.remove(tran);
-
                             }
-
                             if (tran1.getUncompleted() == 0) {
                                 //删除数据库中的挂单信息
                                 tranService.removeById(tran1.getId());
                                 //从队列中删除完成的挂单
                                 trans.remove(tran1);
                             }
-
                         } else {
                             //卖出数量大于买入数量
 
@@ -248,7 +228,6 @@ public class TranController {
                                 tranService.removeById(tran.getId());
                                 //从队列中删除完成的挂单
                                 selllist.remove(tran);
-
                             }
                             if (tran1.getUncompleted() == 0) {
                                 //删除数据库中的挂单信息
@@ -256,7 +235,6 @@ public class TranController {
                                 //从队列中删除完成的挂单
                                 trans.remove(tran1);
                             }
-
                         }
                         //修改持仓数量
                         LambdaQueryWrapper<Position> positionLambdaQueryWrapper = new LambdaQueryWrapper<>();
@@ -267,7 +245,7 @@ public class TranController {
                             //更新持仓数量
                             one.setNumber(one.getNumber() + tran1.getDealnum());
                             //更新成交均价
-                            one.setSalary((one.getSalary() + tran.getSalary() )/ 2);
+                            one.setSalary((one.getSalary() + tran.getSalary()) / 2);
                             //修改至数据库
                             positionService.updateById(one);
                         } else {
@@ -289,26 +267,25 @@ public class TranController {
                         report.setDealnum(tran1.getDealnum());
                         //成交股票产品名称
                         report.setTranname(tran1.getName());
-                        //成交均价
-                        report.setSalary(tran1.getSalary());
+                        //委托价格
+                        report.setSalary(tran.getSalary());
                         //买入方
                         report.setBuy(tran.getUsername());
                         //卖出方
                         report.setSell(tran1.getUsername());
+                        //成交价格
+                        report.setPrice(tran1.getSalary());
+                        //委托单号
+                        report.setTranId(tran.getId());
+                        //状态
+                        report.setStatus("订立");
                         //成交时间
                         report.setTime(new Date());
                         reportService.save(report);
-
-
                     }
                 }
-
-
             }
         }
-
         redisTemplate.boundValueOps("sellList").set(selllist);
-
-
     }
 }
