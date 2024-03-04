@@ -193,8 +193,6 @@ public class TranController {
     //撮合交易
     @RabbitListener(queues = "tranlist")
     public void matchmaking() {
-        //设置变量标识当前缓存队列是否发生改变
-        boolean good = false;
         //首先获取订单队列
         List<Tran> trans = tranService.findbuyList();
         List<Tran> selllist = tranService.findsellList();
@@ -266,7 +264,7 @@ public class TranController {
                             //更新持仓数量
                             one.setNumber(one.getNumber() + tran1.getDealnum());
                             //更新成交均价
-                            one.setSalary(one.getSalary() + tran.getSalary() / 2);
+                            one.setSalary((one.getSalary() + tran.getSalary() )/ 2);
                             //修改至数据库
                             positionService.updateById(one);
                         } else {
