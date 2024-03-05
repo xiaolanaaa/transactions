@@ -179,6 +179,7 @@ public class TranController {
     //撮合交易
     @RabbitListener(queues = "tranlist")
     public void matchmaking() {
+        //设置变量
         boolean good=false;
         //首先获取订单队列
         List<Tran> trans = tranService.findbuyList();
@@ -213,6 +214,7 @@ public class TranController {
                                 //从队列中删除完成的挂单
                                 trans.remove(tran1);
                             }
+                            //完成交易将变量改为true
                             good=true;
                         } else {
                             //卖出数量大于买入数量
@@ -239,6 +241,7 @@ public class TranController {
                             }
                             good=true;
                         }
+                        //判断是否完成交易
                       if (good){
                           //修改持仓数量
                           LambdaQueryWrapper<Position> positionLambdaQueryWrapper = new LambdaQueryWrapper<>();
