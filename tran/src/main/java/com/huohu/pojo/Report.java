@@ -30,5 +30,7 @@ public class Report implements Serializable {
     private String status;
     //委托单号
     private Integer tranId;
+    //输赢金额
+    private Integer amount;
 
 }

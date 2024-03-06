@@ -1,10 +1,7 @@
 package com.huohu.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.huohu.pojo.JsonRes;
-import com.huohu.pojo.Position;
-import com.huohu.pojo.Report;
-import com.huohu.pojo.Tran;
+import com.huohu.pojo.*;
 import com.huohu.service.PositionService;
 import com.huohu.service.ReportService;
 import com.huohu.service.TranService;
@@ -127,6 +124,7 @@ public class TranController {
                     one.setNumber(one.getNumber() - tran.getNum());
                     one.setSalary((one.getSalary() + tran.getSalary()) / 2);
                     //将更新过的持仓数量修改至数据库
+                    rabbitTemplate.convertAndSend("tranlist", tran);
                     positionService.updateById(one);
                 } else {
                     return JsonRes.error("持仓数量不够无法卖出");
@@ -180,137 +178,150 @@ public class TranController {
     @RabbitListener(queues = "tranlist")
     public void matchmaking() {
         //设置变量
-        boolean good=false;
+        boolean good = false;
         //首先获取订单队列
+        //买入订单
         List<Tran> trans = tranService.findbuyList();
+        //卖出订单
         List<Tran> selllist = tranService.findsellList();
         for (Tran tran : trans) {
             for (Tran tran1 : selllist) {
                 //股票产品是否一样
                 if (tran.getName().equals(tran1.getName())) {
                     //大于则进行撮合交易
-                    if (tran.getSalary() >= tran1.getSalary()) {
-                        if (tran.getUncompleted() >= tran1.getUncompleted()) {
-                            //买入数量大于等于卖出数量
-                            //买入成交手数
-                            tran.setDealnum(tran1.getUncompleted());
-                            //买入未成交手数
-                            tran.setUncompleted(tran.getUncompleted() - tran.getDealnum());
-                            //卖出成交数量
-                            tran1.setDealnum(tran.getDealnum());
-                            //卖出未成交手数
-                            tran1.setUncompleted(tran1.getUncompleted() - tran.getDealnum());
-                            tranService.updateById(tran);
-                            tranService.updateById(tran1);
-                            if (tran.getUncompleted() == 0) {
-                                //删除数据库中的挂单信息
-                                tranService.removeById(tran.getId());
-                                //从队列中删除完成的挂单
-                                selllist.remove(tran);
-                            }
-                            if (tran1.getUncompleted() == 0) {
-                                //删除数据库中的挂单信息
-                                tranService.removeById(tran1.getId());
-                                //从队列中删除完成的挂单
-                                trans.remove(tran1);
-                            }
-                            //完成交易将变量改为true
-                            good=true;
-                        } else {
-                            //卖出数量大于买入数量
-
-                            //卖出成交手数
-                            tran1.setDealnum(tran.getUncompleted());
-                            //卖出未成交手数
-                            tran1.setUncompleted(tran1.getUncompleted() - tran1.getDealnum());
-                            tranService.updateById(tran1);
-                            //买入未成交手数
-                            tran.setUncompleted(tran.getUncompleted() - tran1.getDealnum());
-                            tranService.updateById(tran);
-                            if (tran.getUncompleted() == 0) {
-                                //删除数据库中的挂单信息
-                                tranService.removeById(tran.getId());
-                                //从队列中删除完成的挂单
-                                selllist.remove(tran);
-                            }
-                            if (tran1.getUncompleted() == 0) {
-                                //删除数据库中的挂单信息
-                                tranService.removeById(tran1.getId());
-                                //从队列中删除完成的挂单
-                                trans.remove(tran1);
-                            }
-                            good=true;
+                    if (tran.getUncompleted() >= tran1.getUncompleted()) {
+                        //买入数量大于等于卖出数量
+                        //买入成交手数
+                        tran.setDealnum(tran1.getUncompleted());
+                        //买入未成交手数
+                        tran.setUncompleted(tran.getUncompleted() - tran.getDealnum());
+                        //卖出成交数量
+                        tran1.setDealnum(tran.getDealnum());
+                        //卖出未成交手数
+                        tran1.setUncompleted(tran1.getUncompleted() - tran.getDealnum());
+                        tranService.updateById(tran);
+                        tranService.updateById(tran1);
+                        if (tran.getUncompleted() == 0) {
+                            //删除数据库中的挂单信息
+                            tranService.removeById(tran.getId());
+                            //从队列中删除完成的挂单
+                            selllist.remove(tran);
                         }
-                        //判断是否完成交易
-                      if (good){
-                          //修改持仓数量
-                          LambdaQueryWrapper<Position> positionLambdaQueryWrapper = new LambdaQueryWrapper<>();
-                          positionLambdaQueryWrapper.eq(Position::getUserid, 2);
-                          positionLambdaQueryWrapper.eq(Position::getTranname, tran.getName());
-                          Position one = positionService.getOne(positionLambdaQueryWrapper);
-                          if (one != null) {
-                              //更新持仓数量
-                              one.setNumber(one.getNumber() + tran1.getDealnum());
-                              //更新成交均价
-                              one.setSalary((one.getSalary() + tran.getSalary()) / 2);
-                              //修改至数据库
-                              positionService.updateById(one);
-                          } else {
-                              //没有持仓新建持仓对象
-                              Position position = new Position();
-                              //持仓时间
-                              position.setTime(new Date());
-                              //股票产品名称
-                              position.setTranname(tran.getName());
-                              //持仓数量
-                              position.setNumber(tran.getDealnum());
-                              //成交均价
-                              position.setSalary(tran.getSalary());
-                              positionService.save(position);
-                          }
-                          //添加买方成交记录
-                          Report report = new Report();
-                          //成交手数
-                          report.setDealnum(tran1.getDealnum());
-                          //成交股票产品名称
-                          report.setTranname(tran.getName());
-                          //委托价格
-                          report.setSalary(tran.getSalary());
-                          //买入方
-                          report.setBuy(tran.getUsername());
-                          //卖出方
-                          report.setSell(tran1.getUsername());
-                          //成交价格
-                          report.setPrice(tran1.getSalary());
-                          //委托单号
-                          report.setTranId(tran.getId());
-                          //状态
-                          report.setStatus("订立");
-                          //成交时间
-                          report.setTime(new Date());
-                          reportService.save(report);
-                          //添加卖方成交记录
-                          Report reportSell = new Report();
-                          //成交手数
-                          reportSell.setDealnum(tran1.getDealnum());
-                          //成交股票产品名称
-                          reportSell.setTranname(tran1.getName());
-                          //委托价格
-                          reportSell.setSalary(tran1.getSalary());
-                          //买入方
-                          reportSell.setBuy(tran.getUsername());
-                          //卖出方
-                          reportSell.setSell(tran1.getUsername());
-                          //成交价格
-                          reportSell.setPrice(tran.getSalary());
-                          //委托单号
-                          reportSell.setTranId(tran.getId());
-                          //状态
-                          reportSell.setStatus("转让");
-                          //成交时间
-                          reportSell.setTime(new Date());
-                          reportService.save(reportSell);
-                      }
+                        if (tran1.getUncompleted() == 0) {
+                            //删除数据库中的挂单信息
+                            tranService.removeById(tran1.getId());
+                            //从队列中删除完成的挂单
+                            trans.remove(tran1);
+                        }
+                        //完成交易将变量改为true
+                        good = true;
+                    } else {
+                        //卖出数量大于买入数量
+
+                        //卖出成交手数
+                        tran1.setDealnum(tran.getUncompleted());
+                        //卖出未成交手数
+                        tran1.setUncompleted(tran1.getUncompleted() - tran1.getDealnum());
+                        tranService.updateById(tran1);
+                        //买入未成交手数
+                        tran.setUncompleted(tran.getUncompleted() - tran1.getDealnum());
+                        tranService.updateById(tran);
+                        if (tran.getUncompleted() == 0) {
+                            //删除数据库中的挂单信息
+                            tranService.removeById(tran.getId());
+                            //从队列中删除完成的挂单
+                            selllist.remove(tran);
+                        }
+                        if (tran1.getUncompleted() == 0) {
+                            //删除数据库中的挂单信息
+                            tranService.removeById(tran1.getId());
+                            //从队列中删除完成的挂单
+                            trans.remove(tran1);
+                        }
+                        good = true;
+                    }
+                    //判断是否完成交易
+                    if (good) {
+                        //修改持仓数量
+                        LambdaQueryWrapper<Position> positionLambdaQueryWrapper = new LambdaQueryWrapper<>();
+                        positionLambdaQueryWrapper.eq(Position::getUserid, 2);
+                        positionLambdaQueryWrapper.eq(Position::getTranname, tran.getName());
+                        Position one = positionService.getOne(positionLambdaQueryWrapper);
+                        if (one != null) {
+                            //更新持仓数量
+                            one.setNumber(one.getNumber() + tran1.getDealnum());
+                            //更新成交均价
+                            one.setSalary((one.getSalary() + tran.getSalary()) / 2);
+                            //修改至数据库
+                            positionService.updateById(one);
+                        } else {
+                            //没有持仓新建持仓对象
+                            Position position = new Position();
+                            //持仓时间
+                            position.setTime(new Date());
+                            //股票产品名称
+                            position.setTranname(tran.getName());
+                            //持仓数量
+                            position.setNumber(tran.getDealnum());
+                            //成交均价
+                            position.setSalary(tran.getSalary());
+                            positionService.save(position);
+                        }
+                        //添加买方成交记录
+                        Report report = new Report();
+                        //成交手数
+                        report.setDealnum(tran1.getDealnum());
+                        //成交股票产品名称
+                        report.setTranname(tran.getName());
+                        //委托价格
+                        report.setSalary(tran.getSalary());
+                        //买入方
+                        report.setBuy(tran.getUsername());
+                        //卖出方
+                        report.setSell(tran1.getUsername());
+                        //成交价格
+                        report.setPrice(tran1.getSalary());
+                        //委托单号
+                        report.setTranId(tran.getId());
+                        //状态
+                        report.setStatus("订立");
+                        //成交时间
+                        report.setTime(new Date());
+                        report.setAmount(report.getPrice() - report.getSalary());
+                        //添加卖方成交记录
+                        Report reportSell = new Report();
+                        //成交手数
+                        reportSell.setDealnum(tran1.getDealnum());
+                        //成交股票产品名称
+                        reportSell.setTranname(tran1.getName());
+                        //委托价格
+                        reportSell.setSalary(tran1.getSalary());
+                        //买入方
+                        reportSell.setBuy(tran.getUsername());
+                        //卖出方
+                        reportSell.setSell(tran1.getUsername());
+                        //成交价格
+                        reportSell.setPrice(tran.getSalary());
+                        //委托单号
+                        reportSell.setTranId(tran1.getId());
+                        //状态
+                        reportSell.setStatus("转让");
+                        //成交时间
+                        reportSell.setTime(new Date());
+                        reportSell.setAmount(reportSell.getPrice() - reportSell.getSalary());
+                        reportService.save(reportSell);
+                        reportService.save(report);
+
+                        //返还佣金
+                        User byId = userService.getById(tran.getUserid());
+                        User user = userService.getById(tran1.getUserid());
+                        //定义佣金
+                        Integer rebate = 0;
+                        rebate = report.getDealnum() * byId.getRebate();
+                        //买进卖出资金返回佣金佣金
+
+                        Integer rebates = reportSell.getDealnum() * user.getRebate();
+
 
                     }
                 }
