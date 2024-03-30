@@ -32,8 +32,15 @@ public class Tran implements Serializable {
     private Integer uncompleted;
     //生成时间
     private Date time;
+    //是否完成
+    private boolean completed;
 
 
+    public boolean isCompleted() {
+        return completed;
+    }
 
-
+    public void setCompleted(boolean completed) {
+        this.completed = completed;
+    }
 }

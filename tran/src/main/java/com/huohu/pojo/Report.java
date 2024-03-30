@@ -26,11 +26,11 @@ public class Report implements Serializable {
     private String tranname;
     //订立价格
     private Integer price;
-    //状态
-    private String status;
     //委托单号
     private Integer tranId;
     //输赢金额
     private Integer amount;
+    //方向
+    private String status;
 
 }
